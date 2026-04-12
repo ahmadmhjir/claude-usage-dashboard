@@ -10,6 +10,8 @@ Weekly token budget dashboard that visualizes Claude Code spend across days of t
 
 ## Running the dashboard
 
+### Local (with launcher.js)
+
 ```bash
 node launcher.js                        # default: port 3131, auto-opens browser
 node launcher.js --port 4000            # custom port
@@ -18,17 +20,23 @@ node launcher.js --reset-day 1          # change week start (0=Sun … 6=Sat, de
 MACHINE_NAME="MacBook" node launcher.js # custom device label
 ```
 
-For manual / multi-machine use:
+### Manual / multi-machine use
+
 ```bash
 npx ccusage daily --json > usage_daily.json
 # Then open dashboard.html and upload the file
 ```
+
+### GitHub Pages / static hosting
+
+Visit `index.html` or open `dashboard.html?demo` to view the demo data (`demo_usage_data.json`).
 
 ## Requirements
 
 - Node.js 16+
 - `npx` (bundled with Node.js)
 - Claude Code sessions in `~/.claude/projects/`
+- `ccusage` — Claude Code usage command-line tool; `npx ccusage daily --json` exports daily token usage statistics from Claude Code sessions (no separate installation needed)
 
 ## Architecture notes
 
