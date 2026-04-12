@@ -779,9 +779,34 @@ async function processAndRender() {
     for (const file of uploadedFiles) {
       const text = await file.text()
       const json = JSON.parse(text)
-      const entries = json.daily || json // support raw array too
       const label = file.name.replace('.json','')
-      entries.forEach(e => allDays.push({ ...e, _source: label }))
+
+      // Check if this is a pre-processed file (from launcher.js or demo)
+      if (json.weeks && (typeof json.weeks === 'object' && !Array.isArray(json.weeks))) {
+        // Launcher.js format: has weeks object, cols, etc.
+        const sources = json.sources || []
+        const allWeeks = json.weeks
+        const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+        const COLS = json.cols || Array.from({length:7}, (_,i) => (resetDay + i) % 7)
+        const COL_NAMES = json.colNames || COLS.map(d => DAY_NAMES[d])
+        renderDashboard(Object.entries(allWeeks), COLS, COL_NAMES, resetDay, sources)
+        goStep(3)
+        return
+      }
+
+      if (Array.isArray(json.weeks)) {
+        // Demo format: convert weeks array to daily entries
+        for (const week of json.weeks) {
+          for (const [date, day] of Object.entries(week.days || {})) {
+            allDays.push({ ...day, _source: label })
+          }
+        }
+      } else {
+        // Raw ccusage format: has daily array or is array
+        const entries = json.daily || json
+        if (!Array.isArray(entries)) throw new Error('Invalid format')
+        entries.forEach(e => allDays.push({ ...e, _source: label }))
+      }
     }
 
     if (!allDays.length) throw new Error('No daily entries found in the uploaded files.')
