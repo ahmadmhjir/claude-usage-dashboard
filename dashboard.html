@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Usage Matrix</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #F7F6F2;
+    --surface: #FFFFFF;
+    --surface2: #F0EFE9;
+    --border: rgba(26,26,46,0.1);
+    --border-strong: rgba(26,26,46,0.2);
+    --text: #1A1A2E;
+    --text-muted: #6B6B80;
+    --text-faint: #A0A0B0;
+    --accent: #E85D04;
+    --accent-light: #FFF0E8;
+    --mac: #2563EB;
+    --mac-light: #EFF6FF;
+    --rog: #059669;
+    --rog-light: #ECFDF5;
+    --both: #7C3AED;
+    --holiday: #D97706;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--text);
+    color: #fff;
+    padding: 20px 40px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  header .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: -0.3px;
+  }
+  header .logo span { color: var(--accent); }
+  header .subtitle {
+    font-size: 12px;
+    color: rgba(255,255,255,0.4);
+    font-family: 'JetBrains Mono', monospace;
+    margin-left: auto;
+  }
+
+  /* ── Steps indicator ── */
+  .steps-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 40px;
+    display: flex;
+    gap: 0;
+  }
+  .step-tab {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 20px 16px 0;
+    font-size: 13px;
+    color: var(--text-faint);
+    font-weight: 500;
+    cursor: default;
+    position: relative;
+    margin-right: 24px;
+  }
+  .step-tab.active { color: var(--text); }
+  .step-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+  }
+  .step-tab.done { color: var(--rog); }
+  .step-num {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--surface2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .step-tab.active .step-num { background: var(--accent); color: #fff; }
+  .step-tab.done .step-num { background: var(--rog); color: #fff; }
+
+  /* ── Main container ── */
+  main { max-width: 860px; margin: 0 auto; padding: 48px 24px 80px; }
+
+  /* ── Step panels ── */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ── Step 1: Command ── */
+  .step-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-bottom: 8px;
+  }
+  .step-desc { color: var(--text-muted); font-size: 14px; margin-bottom: 32px; line-height: 1.7; }
+
+  .cmd-block {
+    background: var(--text);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 12px;
+  }
+  .cmd-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: #A8E6CF;
+    flex: 1;
+    word-break: break-all;
+  }
+  .cmd-text .prompt { color: rgba(255,255,255,0.3); margin-right: 8px; }
+  .copy-btn {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.7);
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .copy-btn:hover { background: rgba(255,255,255,0.18); color: #fff; }
+  .copy-btn.copied { background: var(--rog); color: #fff; border-color: var(--rog); }
+
+  .cmd-note {
+    font-size: 12px;
+    color: var(--text-faint);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 28px;
+    padding-left: 4px;
+  }
+  .cmd-note b { color: var(--text-muted); }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  .info-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+  }
+  .info-card-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-faint);
+    margin-bottom: 6px;
+  }
+  .info-card-val {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  /* Reset day config */
+  .config-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 32px;
+  }
+  .config-row label { font-size: 14px; font-weight: 500; flex: 1; }
+  .config-row select {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 7px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+  }
+
+  /* Next button */
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 12px 28px;
+    border-radius: var(--radius-sm);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-primary:hover { background: #D14D00; }
+  .btn-secondary {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-strong);
+    padding: 12px 20px;
+    border-radius: var(--radius-sm);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-left: 10px;
+  }
+  .btn-secondary:hover { border-color: var(--text-muted); color: var(--text); }
+
+  /* ── Step 2: Upload ── */
+  .upload-machines {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .upload-zone {
+    border: 2px dashed var(--border-strong);
+    border-radius: var(--radius);
+    padding: 32px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface);
+    position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: var(--accent-light);
+  }
+  .upload-zone.has-file {
+    border-color: var(--rog);
+    border-style: solid;
+    background: var(--rog-light);
+  }
+  .upload-zone input[type="file"] {
+    position: absolute; inset: 0;
+    opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .upload-icon { font-size: 28px; margin-bottom: 10px; display: block; }
+  .upload-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .upload-sub { font-size: 12px; color: var(--text-muted); }
+  .upload-fname {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--rog);
+    margin-top: 8px;
+    font-weight: 500;
+  }
+  .upload-badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+  .badge-mac { background: var(--mac-light); color: var(--mac); }
+  .badge-rog { background: var(--rog-light); color: var(--rog); }
+
+  .upload-or {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-faint);
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+  .upload-or::before, .upload-or::after {
+    content: ''; flex: 1;
+    height: 1px; background: var(--border);
+  }
+
+  .upload-single-zone {
+    border: 2px dashed var(--border-strong);
+    border-radius: var(--radius);
+    padding: 28px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface);
+    position: relative;
+    margin-bottom: 28px;
+  }
+  .upload-single-zone:hover, .upload-single-zone.drag-over {
+    border-color: var(--accent);
+    background: var(--accent-light);
+  }
+  .upload-single-zone input[type="file"] {
+    position: absolute; inset: 0;
+    opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .files-list {
+    display: flex; flex-direction: column; gap: 8px;
+    margin-top: 14px;
+  }
+  .file-item {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--rog-light);
+    border: 1px solid rgba(5,150,105,0.2);
+    border-radius: var(--radius-sm);
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+  .file-item-name {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--rog);
+    flex: 1;
+  }
+  .file-item-remove {
+    cursor: pointer;
+    color: var(--text-faint);
+    font-size: 14px;
+    line-height: 1;
+    border: none;
+    background: none;
+    padding: 0 4px;
+  }
+  .file-item-remove:hover { color: var(--accent); }
+
+  /* ── Step 3: Dashboard ── */
+  .dashboard-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0,1fr));
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+  }
+  .stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.7px; color: var(--text-faint); margin-bottom: 6px; }
+  .stat-val { font-size: 22px; font-weight: 600; font-family: 'Syne', sans-serif; letter-spacing: -0.5px; color: var(--text); }
+  .stat-sub { font-size: 11px; color: var(--text-faint); margin-top: 3px; }
+
+  /* ── Matrix table ── */
+  .matrix-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .matrix-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .matrix-table th {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-faint);
+    padding: 12px 6px 10px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .matrix-table th.reset-col {
+    color: var(--accent);
+    border-left: 2px solid var(--accent);
+    position: relative;
+  }
+  .matrix-table th.reset-col::after {
+    content: 'reset';
+    display: block;
+    font-size: 9px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--accent);
+    opacity: 0.7;
+    margin-top: 2px;
+    text-transform: lowercase;
+    letter-spacing: 0.3px;
+  }
+  .matrix-table th.wk-h { text-align: left; padding-left: 16px; width: 90px; }
+  .matrix-table th.total-h { background: var(--surface2); }
+  .matrix-table td { border-bottom: 1px solid var(--border); }
+  .matrix-table tr:last-child td { border-bottom: none; }
+
+  .wk-label {
+    padding: 0 8px 0 16px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  .wk-label.partial { color: var(--text-faint); font-style: italic; }
+  .partial-tag {
+    display: inline-block;
+    font-size: 8px;
+    background: var(--surface2);
+    border-radius: 3px;
+    padding: 1px 4px;
+    margin-top: 2px;
+    font-style: normal;
+    color: var(--text-faint);
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .day-cell {
+    position: relative;
+    padding: 10px 4px 12px;
+    text-align: center;
+    vertical-align: top;
+    border-left: 0.5px solid var(--border);
+    cursor: default;
+    transition: background 0.1s;
+  }
+  .day-cell:hover { background: var(--bg); }
+  .day-cell.reset-col { border-left: 2px solid var(--accent) !important; }
+  .day-cell.empty { background: var(--bg); }
+  .day-cell .pct {
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'Syne', sans-serif;
+    color: var(--text);
+    line-height: 1.2;
+  }
+  .day-cell .amt {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-faint);
+    margin-top: 3px;
+  }
+  .day-cell .bar {
+    position: absolute;
+    bottom: 0; left: 0;
+    height: 3px;
+    transition: width 0.4s ease;
+  }
+  .day-cell .hol-dot {
+    display: inline-block;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--holiday);
+    vertical-align: middle;
+    margin-left: 3px;
+    position: relative;
+    top: -1px;
+  }
+
+  .total-cell {
+    background: var(--surface2);
+    text-align: center;
+    padding: 10px 8px;
+    vertical-align: middle;
+    border-left: 1px solid var(--border-strong);
+  }
+  .total-cell .total-pct {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-faint);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .total-cell .total-amt {
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'Syne', sans-serif;
+    color: var(--text);
+    margin-top: 2px;
+  }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .legend-item { display: flex; align-items: center; gap: 7px; }
+  .legend-bar { width: 28px; height: 3px; border-radius: 2px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* ── Tooltip ── */
+  .tooltip {
+    display: none;
+    position: absolute;
+    background: var(--text);
+    color: #fff;
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+    z-index: 100;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: none;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.6;
+  }
+  .day-cell:hover .tooltip { display: block; }
+
+  /* ── Rerun button ── */
+  .rerun-btn {
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    color: var(--text-muted);
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .rerun-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── Error ── */
+  .error-box {
+    background: #FFF0F0;
+    border: 1px solid #FFCCCC;
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    color: #B91C1C;
+    font-size: 13px;
+    margin-bottom: 16px;
+    display: none;
+  }
+  .error-box.visible { display: block; }
+
+  @media (max-width: 600px) {
+    main { padding: 28px 16px 60px; }
+    header { padding: 16px 20px; }
+    .steps-bar { padding: 0 20px; overflow-x: auto; }
+    .upload-machines { grid-template-columns: 1fr; }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+    .info-grid { grid-template-columns: 1fr; }
+    .matrix-wrap { overflow-x: auto; }
+    .matrix-table { min-width: 580px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Claude <span>Usage</span> Matrix</div>
+  <div class="subtitle">ccusage → weekly % dashboard</div>
+</header>
+
+<div class="steps-bar">
+  <div class="step-tab active" id="tab-1">
+    <span class="step-num">1</span> Command
+  </div>
+  <div class="step-tab" id="tab-2">
+    <span class="step-num">2</span> Upload
+  </div>
+  <div class="step-tab" id="tab-3">
+    <span class="step-num">3</span> Matrix
+  </div>
+</div>
+
+<main>
+
+  <!-- ═══ STEP 1 ═══ -->
+  <div class="panel active" id="panel-1">
+    <div class="step-title">Run this on each machine</div>
+    <p class="step-desc">
+      This tool reads your local Claude Code session files via <code style="font-family:'JetBrains Mono';font-size:13px;background:var(--surface2);padding:1px 5px;border-radius:3px;">ccusage</code>.
+      Run the command below on every device you use Claude from, then upload the output files.
+    </p>
+
+    <div class="cmd-block">
+      <span class="cmd-text"><span class="prompt">$</span>npx ccusage daily --json &gt; usage_daily.json</span>
+      <button class="copy-btn" onclick="copyCmd(this)">Copy</button>
+    </div>
+    <div class="cmd-note">
+      Saves to <b>usage_daily.json</b> in your current directory &nbsp;·&nbsp; Run separately on each machine
+    </div>
+
+    <div class="info-grid">
+      <div class="info-card">
+        <div class="info-card-label">What ccusage reads</div>
+        <div class="info-card-val">Your local Claude Code session files at <code style="font-family:'JetBrains Mono';font-size:12px;">~/.claude/projects/</code> — no API keys or network access needed.</div>
+      </div>
+      <div class="info-card">
+        <div class="info-card-label">Multiple machines</div>
+        <div class="info-card-val">Run on each device separately. The dashboard merges all files on upload, combining same-day entries automatically.</div>
+      </div>
+    </div>
+
+    <div class="config-row">
+      <label>Weekly budget resets on</label>
+      <select id="reset-day">
+        <option value="3" selected>Wednesday (default)</option>
+        <option value="0">Sunday</option>
+        <option value="1">Monday</option>
+        <option value="2">Tuesday</option>
+        <option value="3">Wednesday</option>
+        <option value="4">Thursday</option>
+        <option value="5">Friday</option>
+        <option value="6">Saturday</option>
+      </select>
+    </div>
+
+    <button class="btn-primary" onclick="goStep(2)">Next: Upload files →</button>
+  </div>
+
+  <!-- ═══ STEP 2 ═══ -->
+  <div class="panel" id="panel-2">
+    <div class="step-title">Upload your usage files</div>
+    <p class="step-desc">
+      Upload the <code style="font-family:'JetBrains Mono';font-size:13px;background:var(--surface2);padding:1px 5px;border-radius:3px;">usage_daily.json</code> files from each machine.
+      You can upload multiple files at once — the dashboard merges them automatically.
+    </p>
+
+    <div class="upload-single-zone" id="drop-zone">
+      <input type="file" accept=".json" multiple id="file-input" onchange="handleFiles(this.files)">
+      <span class="upload-icon">⬆</span>
+      <div class="upload-label">Drop JSON files here or click to browse</div>
+      <div class="upload-sub">Supports multiple files (one per machine)</div>
+    </div>
+
+    <div class="files-list" id="files-list"></div>
+
+    <div class="error-box" id="error-box"></div>
+
+    <div style="margin-top:24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <button class="btn-primary" onclick="processAndRender()" id="render-btn" disabled>
+        Build matrix →
+      </button>
+      <button class="btn-secondary" onclick="goStep(1)">← Back</button>
+      <span id="file-count" style="font-size:13px;color:var(--text-faint);"></span>
+    </div>
+  </div>
+
+  <!-- ═══ STEP 3: Dashboard ═══ -->
+  <div class="panel" id="panel-3">
+    <div class="dashboard-header">
+      <div>
+        <div class="step-title">Weekly usage matrix</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-top:4px;" id="dash-subtitle"></p>
+      </div>
+      <button class="rerun-btn" onclick="goStep(1)">↺ Upload new files</button>
+    </div>
+
+    <div class="stats-row" id="stats-row"></div>
+    <div class="matrix-wrap"><table class="matrix-table" id="matrix-table"></table></div>
+    <div class="legend" id="legend"></div>
+  </div>
+
+</main>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let uploadedFiles = []
+
+// ── Navigation ─────────────────────────────────────────────────────────────
+function goStep(n) {
+  document.querySelectorAll('.panel').forEach((p,i) => {
+    p.classList.toggle('active', i+1 === n)
+  })
+  document.querySelectorAll('.step-tab').forEach((t,i) => {
+    t.classList.remove('active','done')
+    if (i+1 === n) t.classList.add('active')
+    else if (i+1 < n) t.classList.add('done')
+  })
+  window.scrollTo(0,0)
+}
+
+// ── Copy command ────────────────────────────────────────────────────────────
+function copyCmd(btn) {
+  navigator.clipboard.writeText('npx ccusage daily --json > usage_daily.json')
+  btn.textContent = 'Copied!'
+  btn.classList.add('copied')
+  setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied') }, 2000)
+}
+
+// ── File upload ─────────────────────────────────────────────────────────────
+const dropZone = document.getElementById('drop-zone')
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over') })
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'))
+dropZone.addEventListener('drop', e => {
+  e.preventDefault()
+  dropZone.classList.remove('drag-over')
+  handleFiles(e.dataTransfer.files)
+})
+
+function handleFiles(fileList) {
+  for (const f of fileList) {
+    if (f.type !== 'application/json' && !f.name.endsWith('.json')) continue
+    if (uploadedFiles.find(u => u.name === f.name)) continue
+    uploadedFiles.push(f)
+  }
+  renderFileList()
+}
+
+function removeFile(name) {
+  uploadedFiles = uploadedFiles.filter(f => f.name !== name)
+  renderFileList()
+}
+
+function renderFileList() {
+  const list = document.getElementById('files-list')
+  const btn = document.getElementById('render-btn')
+  const count = document.getElementById('file-count')
+
+  list.innerHTML = uploadedFiles.map(f => `
+    <div class="file-item">
+      <span style="color:var(--rog);font-size:14px;">✓</span>
+      <span class="file-item-name">${f.name}</span>
+      <span style="font-size:11px;color:var(--text-faint);">${(f.size/1024).toFixed(1)} KB</span>
+      <button class="file-item-remove" onclick="removeFile('${f.name}')">✕</button>
+    </div>`).join('')
+
+  btn.disabled = uploadedFiles.length === 0
+  count.textContent = uploadedFiles.length
+    ? `${uploadedFiles.length} file${uploadedFiles.length>1?'s':''} ready`
+    : ''
+}
+
+// ── Process & Render ────────────────────────────────────────────────────────
+async function processAndRender() {
+  showError('')
+  const resetDay = parseInt(document.getElementById('reset-day').value)
+
+  try {
+    // 1. Read all files
+    const allDays = []
+    for (const file of uploadedFiles) {
+      const text = await file.text()
+      const json = JSON.parse(text)
+      const entries = json.daily || json // support raw array too
+      const label = file.name.replace('.json','')
+      entries.forEach(e => allDays.push({ ...e, _source: label }))
+    }
+
+    if (!allDays.length) throw new Error('No daily entries found in the uploaded files.')
+
+    // 2. Merge same-date entries (multiple machines on same day)
+    const byDate = {}
+    for (const e of allDays) {
+      if (!byDate[e.date]) {
+        byDate[e.date] = { ...e, _devices: [e._source] }
+      } else {
+        byDate[e.date].totalCost += e.totalCost
+        byDate[e.date].totalTokens = (byDate[e.date].totalTokens||0) + (e.totalTokens||0)
+        byDate[e.date]._devices.push(e._source)
+      }
+    }
+
+    // 3. Assign each date to a week (starting on resetDay)
+    function getWeekStart(dateStr) {
+      const d = new Date(dateStr + 'T00:00:00')
+      const day = d.getDay()
+      let diff = (day - resetDay + 7) % 7
+      const wed = new Date(d)
+      wed.setDate(d.getDate() - diff)
+      return wed.toISOString().slice(0,10)
+    }
+
+    const weeks = {}
+    for (const [date, entry] of Object.entries(byDate)) {
+      const ws = getWeekStart(date)
+      if (!weeks[ws]) weeks[ws] = { entries: {}, total: 0 }
+      weeks[ws].entries[date] = entry
+      weeks[ws].total += entry.totalCost
+    }
+
+    // 4. Build column order (7 days from resetDay)
+    const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+    const COLS = Array.from({length:7}, (_,i) => (resetDay + i) % 7)
+    const COL_NAMES = COLS.map(d => DAY_NAMES[d])
+
+    // 5. Sort weeks
+    const sortedWeeks = Object.entries(weeks).sort(([a],[b]) => a.localeCompare(b))
+
+    // 6. Detect which sources are present
+    const allSources = [...new Set(allDays.map(e => e._source))]
+
+    // 7. Render
+    renderDashboard(sortedWeeks, COLS, COL_NAMES, resetDay, allSources)
+    goStep(3)
+
+  } catch(err) {
+    showError('Could not parse files: ' + err.message)
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-box')
+  el.textContent = msg
+  el.classList.toggle('visible', !!msg)
+}
+
+// ── Dashboard Rendering ─────────────────────────────────────────────────────
+function renderDashboard(sortedWeeks, COLS, COL_NAMES, resetDay, sources) {
+  // Stats
+  const totalCost = sortedWeeks.reduce((s,[,w]) => s+w.total, 0)
+  const allEntries = sortedWeeks.flatMap(([,w]) => Object.values(w.entries))
+  const activeDays = allEntries.length
+  const avgPerDay = totalCost / activeDays
+  const maxWeek = Math.max(...sortedWeeks.map(([,w]) => w.total))
+
+  document.getElementById('dash-subtitle').textContent =
+    `${sortedWeeks.length} weeks · ${activeDays} active days · ${sources.length} device${sources.length>1?'s':''}`
+
+  const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Total spend</div>
+      <div class="stat-val">$${totalCost.toFixed(2)}</div>
+      <div class="stat-sub">across all weeks</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Peak week</div>
+      <div class="stat-val">$${maxWeek.toFixed(2)}</div>
+      <div class="stat-sub">${sortedWeeks.find(([,w])=>w.total===maxWeek)?.[0] || ''}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Avg per active day</div>
+      <div class="stat-val">$${avgPerDay.toFixed(2)}</div>
+      <div class="stat-sub">${activeDays} days recorded</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Devices tracked</div>
+      <div class="stat-val">${sources.length}</div>
+      <div class="stat-sub">${sources.join(' + ')}</div>
+    </div>`
+
+  // Colors per source (first = blue, second = teal, third = purple, rest = gray)
+  const SRC_COLORS = ['#2563EB','#059669','#7C3AED','#D97706','#888']
+  const srcColor = {}
+  sources.forEach((s,i) => srcColor[s] = SRC_COLORS[i] || SRC_COLORS[4])
+
+  function getCellColor(entry) {
+    if (!entry) return '#ccc'
+    if (entry._devices.length > 1) return '#7C3AED'
+    return srcColor[entry._devices[0]] || '#888'
+  }
+
+  // Build table
+  const table = document.getElementById('matrix-table')
+
+  // Header
+  const thead = document.createElement('thead')
+  let thHtml = `<th class="wk-h">Week</th>`
+  COL_NAMES.forEach((name, i) => {
+    const dayNum = COLS[i]
+    const isReset = dayNum === resetDay
+    thHtml += `<th${isReset?' class="reset-col"':''}>${name}</th>`
+  })
+  thHtml += `<th class="total-h" style="width:80px;">Total</th>`
+  thead.innerHTML = `<tr>${thHtml}</tr>`
+  table.innerHTML = ''
+  table.appendChild(thead)
+
+  const tbody = document.createElement('tbody')
+
+  sortedWeeks.forEach(([ws, week], wi) => {
+    // Detect partial week (first or last)
+    const isPartial = wi === 0 || wi === sortedWeeks.length - 1
+    const tr = document.createElement('tr')
+
+    // Week label cell
+    const tdLabel = document.createElement('td')
+    tdLabel.className = 'wk-label' + (isPartial ? ' partial' : '')
+    const endDate = new Date(ws + 'T00:00:00')
+    endDate.setDate(endDate.getDate() + 6)
+    const startFmt = ws.slice(5)  // MM-DD
+    const endFmt = endDate.toISOString().slice(5,10)
+    tdLabel.innerHTML = isPartial
+      ? `${startFmt}<br><span class="partial-tag">partial</span>`
+      : `${startFmt}<br><span style="font-size:9px;color:var(--text-faint);">→ ${endFmt}</span>`
+    tr.appendChild(tdLabel)
+
+    // Day cells
+    COLS.forEach((dayNum, ci) => {
+      const isReset = dayNum === resetDay
+      // find entry for this day in this week
+      const targetDate = new Date(ws + 'T00:00:00')
+      targetDate.setDate(targetDate.getDate() + ci)
+      const dateStr = targetDate.toISOString().slice(0,10)
+      const entry = week.entries[dateStr]
+
+      const td = document.createElement('td')
+
+      if (!entry) {
+        td.className = 'day-cell empty' + (isReset ? ' reset-col' : '')
+        tr.appendChild(td)
+        return
+      }
+
+      const pct = Math.round(entry.totalCost / week.total * 100)
+      const color = getCellColor(entry)
+      td.className = 'day-cell' + (isReset ? ' reset-col' : '')
+
+      const deviceLabel = entry._devices.join(' + ')
+      const tokensK = entry.totalTokens ? (entry.totalTokens/1000).toFixed(0)+'K tokens' : ''
+
+      td.innerHTML = `
+        <div class="tooltip">${dateStr}<br>$${entry.totalCost.toFixed(2)} · ${pct}%<br>${deviceLabel}${tokensK ? '<br>'+tokensK : ''}</div>
+        <div class="pct">${pct}%</div>
+        <div class="amt">$${entry.totalCost.toFixed(2)}</div>
+        <div class="bar" style="width:${pct}%;background:${color};"></div>`
+
+      tr.appendChild(td)
+    })
+
+    // Total cell
+    const tdTotal = document.createElement('td')
+    tdTotal.className = 'total-cell'
+    tdTotal.innerHTML = `
+      <div class="total-pct">100%</div>
+      <div class="total-amt">$${week.total.toFixed(2)}</div>`
+    tr.appendChild(tdTotal)
+
+    tbody.appendChild(tr)
+  })
+
+  table.appendChild(tbody)
+
+  // Legend
+  let legendHtml = ''
+  sources.forEach((s,i) => {
+    legendHtml += `<div class="legend-item">
+      <span class="legend-bar" style="background:${srcColor[s]};"></span>
+      <span>${s}</span>
+    </div>`
+  })
+  if (sources.length > 1) {
+    legendHtml += `<div class="legend-item">
+      <span class="legend-bar" style="background:#7C3AED;"></span>
+      <span>both devices</span>
+    </div>`
+  }
+  legendHtml += `<div class="legend-item" style="margin-left:auto;">
+    <span style="font-size:11px;color:var(--text-faint);font-family:'JetBrains Mono',monospace;">bar width = % of weekly spend</span>
+  </div>`
+  document.getElementById('legend').innerHTML = legendHtml
+}
+
+// ── Auto-load from query param (for launcher.js) ─────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  const params = new URLSearchParams(location.search)
+  if (params.has('autoload')) {
+    try {
+      const resp = await fetch('./usage_data.json')
+      if (resp.ok) {
+        const json = await resp.json()
+        // Inject as virtual file list and skip to step 3
+        const sources = json.sources || []
+        const allWeeks = json.weeks
+        if (allWeeks) {
+          // Pre-processed format from launcher.js
+          const COL_NAMES = json.colNames
+          const COLS = json.cols
+          const resetDay = json.resetDay
+          renderDashboard(Object.entries(allWeeks), COLS, COL_NAMES, resetDay, sources)
+          goStep(3)
+          return
+        }
+      }
+    } catch(e) { /* fall through to normal flow */ }
+  }
+})
+</script>
+</body>
+</html>
