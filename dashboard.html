@@ -651,7 +651,10 @@
       </select>
     </div>
 
-    <button class="btn-primary" onclick="goStep(2)">Next: Upload files →</button>
+    <div style="display: flex; gap: 12px;">
+      <button class="btn-primary" onclick="goStep(2)">Next: Upload files →</button>
+      <button class="btn-secondary" onclick="loadDemoData()">Use Demo Data</button>
+    </div>
   </div>
 
   <!-- ═══ STEP 2 ═══ -->
@@ -722,6 +725,33 @@ function copyCmd(btn) {
   btn.textContent = 'Copied!'
   btn.classList.add('copied')
   setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied') }, 2000)
+}
+
+// ── Load demo data ───────────────────────────────────────────────────────────
+async function loadDemoData() {
+  try {
+    const resp = await fetch('./demo_usage_data.json')
+    if (!resp.ok) throw new Error('Demo file not found')
+    const json = await resp.json()
+    const resetDay = parseInt(document.getElementById('reset-day').value)
+
+    // Convert demo format to internal format
+    const allWeeks = {}
+    for (const week of json.weeks) {
+      const ws = week.weekStart
+      allWeeks[ws] = { entries: week.days, total: week.total }
+    }
+
+    const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+    const COLS = Array.from({length:7}, (_,i) => (resetDay + i) % 7)
+    const COL_NAMES = COLS.map(d => DAY_NAMES[d])
+    const sources = json.meta?.devices || []
+
+    renderDashboard(Object.entries(allWeeks), COLS, COL_NAMES, resetDay, sources)
+    goStep(3)
+  } catch(e) {
+    showError('Could not load demo data: ' + e.message)
+  }
 }
 
 // ── File upload ─────────────────────────────────────────────────────────────
