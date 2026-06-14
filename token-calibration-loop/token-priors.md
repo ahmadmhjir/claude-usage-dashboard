@@ -1,4 +1,9 @@
-# token-priors.md — the carried-forward core (unified: tokens + time + burn)
+# token-priors.md — EXAMPLE TEMPLATE (tokens + time + burn)
+
+> This is the **example/template** shipped with the calibration-loop feature. The live,
+> per-user priors that the SessionStart hook injects live elsewhere (e.g.
+> `indodax-bot/docs/loop/token-priors.md`). Copy this file to your working repo, point the
+> hook at that copy, and let the loop calibrate it. Do not put real calibration data here.
 
 Beliefs about cost per task-type. One row = one belief. RECALL reads this; DISTILL
 updates exactly one row per pass. This is the shared core of the **calibration loop**
@@ -20,15 +25,23 @@ estimate gen_rate as the p90 of observed output/sec (turns with little tool-wait
 tool-heavy turns. Per-task-type effective burn is the practical predictor. gen_rate is
 unknown until the time loop logs ~10 turns; the prompt hook surfaces the live estimate.
 
-| task-type          | tokens (k) | time band  | burn (tok/s) | conf | n | last verdict | note |
-|--------------------|------------|------------|--------------|------|---|--------------|------|
-| read+answer        | 2 – 6      | —          | —            | 0.30 | 0 | —            | seed guess; generation-bound (high burn) |
-| single-file edit   | 4 – 10     | —          | —            | 0.30 | 0 | —            | seed guess |
-| multi-file feature | 20 – 60    | —          | —            | 0.20 | 0 | —            | seed guess |
-| codebase explore   | 15 – 50    | —          | —            | 0.20 | 0 | —            | wide, fan-out; tool-bound (low burn) |
-| backtest/study run | 10 – 40    | —          | —            | 0.20 | 0 | —            | tool-heavy; tool-bound (low burn) |
-| design/doc write   | 7 – 14     | —          | —            | 0.55 | 2 | ON_BUDGET    | actual 11.0k non-cache (pass2); +74.9k delta was 90% cache overhead; generation-bound |
-| debug loop         | 10 – 40    | —          | —            | 0.15 | 0 | —            | high variance |
+**Output-prediction seed (TBA cross-check):** the ECC `token-budget-advisor` skill predicts
+`output ≈ input_tokens × mult`, with complexity multipliers Simple 3-8×, Medium 8-20×,
+Code+ctx 10-25×, Complex 15-40×, Creative 10-30×. When non-cache *input* is tiny (context is
+cached), non-cache tokens ≈ output tokens — the multiplier predicts the whole band given the
+prompt's fresh input size. **Caveat:** the multiplier is output-only; tool-bound rows
+(explore/backtest/debug) undershoot it because tool-result tokens aren't in the formula. Seed
+rows (n=0) are anchored to the TBA class below; calibrated rows (n>0) keep their measured band.
+
+| task-type          | TBA class (mult)   | tokens (k) | time band | burn (tok/s) | conf | n | last verdict | note |
+|--------------------|--------------------|------------|-----------|--------------|------|---|--------------|------|
+| read+answer        | Simple–Med (3-20×) | 2 – 6      | —         | —            | 0.30 | 0 | —            | seed=TBA; generation-bound (high burn) |
+| single-file edit   | Code+ctx (10-25×)  | 4 – 10     | —         | —            | 0.30 | 0 | —            | seed=TBA |
+| multi-file feature | Complex (15-40×)   | 15 – 40    | —         | —            | 0.20 | 0 | —            | seed=TBA |
+| codebase explore   | tool-bound (n/a)   | 15 – 50    | —         | —            | 0.20 | 0 | —            | TBA undershoots; tool-result tokens off-formula |
+| backtest/study run | tool-bound (n/a)   | 10 – 40    | —         | —            | 0.20 | 0 | —            | TBA undershoots; tool-heavy (low burn) |
+| design/doc write   | Complex/Creative   | 7 – 14     | —         | —            | 0.20 | 0 | —            | seed=TBA |
+| debug loop         | Complex (15-40×)   | 10 – 40    | —         | —            | 0.15 | 0 | —            | seed≈TBA; high variance |
 
 Rules:
 - After each pass, move the matching band ~30% toward the actual, then set confidence by
@@ -38,3 +51,12 @@ Rules:
 - **Burn sanity check:** if a row's tokens(k) and time band imply a burn far from the
   gen_rate envelope, the turn was tool-bound — that's signal (low effective burn), not
   error. Tool-bound rows widen the time band without widening tokens.
+
+## Static-overhead audit (context-budget twin) — optional companion check
+
+The dynamic loop above measures *per-turn* cost; the ECC `context-budget` skill audits the
+*fixed* per-session input (the constant that inflates every turn's `inputTokens`, mostly
+cached). Run it occasionally and record the breakdown: MCP tool schemas (~500 tok/tool —
+deferring tools via ToolSearch zeroes this), CLAUDE.md chain, skills list, memory index,
+this priors file. Biggest lever is usually MCP eager-load; second is pruning a stale memory
+index.

@@ -6,9 +6,15 @@ set -euo pipefail
 
 LOOP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
+# The in-package token-priors.md is the SEED/EXAMPLE only. The live, calibrated ledger
+# lives outside the example package so re-running this installer never clobbers it.
+# Override PRIORS_FILE to point at your own ledger.
+PRIORS_FILE="${PRIORS_FILE:-$HOME/trading-bot/indodax-bot/docs/loop/token-priors.md}"
+SEED_PRIORS="$LOOP_DIR/token-priors.md"
 
 echo "Loop package: $LOOP_DIR"
 echo "Claude settings: $SETTINGS"
+echo "Live priors ledger: $PRIORS_FILE"
 
 # 1. Dependency check
 command -v python3 >/dev/null || { echo "ERROR: python3 required"; exit 1; }
@@ -17,11 +23,19 @@ if ! command -v ccusage >/dev/null; then
   echo "      (needed for the RUN step token snapshots)"
 fi
 
-# 2. Merge the SessionStart hook into settings.json (idempotent)
-python3 - "$SETTINGS" "$LOOP_DIR" <<'PY'
+# 2. Seed the live ledger from the example if it does not exist yet (never overwrite)
+if [ ! -f "$PRIORS_FILE" ]; then
+  mkdir -p "$(dirname "$PRIORS_FILE")"
+  cp "$SEED_PRIORS" "$PRIORS_FILE"
+  echo "Seeded live ledger from example: $PRIORS_FILE"
+else
+  echo "Live ledger already exists, leaving it untouched."
+fi
+
+# 3. Merge the SessionStart hook into settings.json (idempotent)
+python3 - "$SETTINGS" "$LOOP_DIR" "$PRIORS_FILE" <<'PY'
 import json, os, sys
-settings_path, loop_dir = sys.argv[1], sys.argv[2]
-priors = os.path.join(loop_dir, "token-priors.md")
+settings_path, loop_dir, priors = sys.argv[1], sys.argv[2], sys.argv[3]
 cmd = (
     f"python3 -c \"import json,os;f='{priors}';"
     "p=open(f).read() if os.path.exists(f) else '(priors missing)';"
