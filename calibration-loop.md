@@ -39,6 +39,15 @@ Both ultimately measure the **same per-turn token usage** — the manual pass re
 The transcript path makes per-turn token accounting automatic, so the time loop now logs
 `elapsed_s · out_tok · noncache_tok` together and computes burn for free.
 
+## The limit anchor (usagecal)
+
+A third calibrated quantity: the **session limit cap**. Anthropic doesn't publish it and
+the model can't poll `/usage`, but pasting `/usage` once lets `time-calibration-loop/
+usagecal.py` back-compute it — `cap ≈ noncache_total / (session_pct/100)` — and store the
+median over pastes. Between pastes the `UserPromptSubmit` hook extrapolates the live % from
+the non-cache tokens `durations.log` already records (no ccusage call). So manual `/usage`
+reads become a self-correcting limit prior, surfaced every turn as a labelled proxy.
+
 ## The shared core
 
 `token-calibration-loop/token-priors.md` — one row per task-type, columns:

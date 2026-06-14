@@ -27,6 +27,25 @@ so observed *effective* burn is lower on tool-heavy turns. The loop reports both
 effective burn and a gen-rate estimate (p90 of output/sec). See
 [`../calibration-loop.md`](../calibration-loop.md) for the full model.
 
+## Limit calibration (usagecal)
+
+The authoritative 5h-session limit % lives only in the interactive `/usage` panel, which
+the model can't poll. `usagecal.py` turns each manual `/usage` paste into a self-correcting
+cap prior:
+
+```bash
+# when you paste /usage, anchor it (reads ccusage once, back-computes the cap):
+python3 usagecal.py record 12 --week 36 --reset "Jun 15 2:50am"
+python3 usagecal.py status          # cap + current % (authoritative ccusage read)
+```
+
+`cap ≈ noncache_total / (session_pct/100)`; the stored cap is the median over all pasted
+pairs. Between pastes, the `UserPromptSubmit` hook **extrapolates** the current % by adding
+the non-cache tokens logged in `durations.log` since the anchor — local-file reads only, no
+ccusage call, so it adds no per-turn latency. Each new paste re-anchors and removes drift.
+It is a **proxy** (`/usage` is cost/quota-weighted, ccusage counts raw tokens) and is
+labelled as such in the injected line.
+
 ## Install (this or any workspace)
 
 ```bash
@@ -43,6 +62,7 @@ Requires `python3` (parses the hook payload + transcript — `jq` is **not** nee
 ## Files
 
 - `time-loop.py` — the hook (modes: `prompt`, `stop`)
+- `usagecal.py` — `/usage` → cap calibration CLI (`record`, `status`)
 - `install.sh` — idempotent merge of the two hooks into `~/.claude/settings.json`
 - State (created at runtime, not committed): `~/.claude/time-loop/`
   - `durations.log` — tab-separated `<iso>\t<elapsed_s>\t<out_tok>\t<noncache_tok>\t<tag>`,
@@ -50,6 +70,7 @@ Requires `python3` (parses the hook payload + transcript — `jq` is **not** nee
   - `start-<session_id>` — transient per-session start epoch (auto-removed on Stop)
   - `tag-<session_id>` — optional task-type tag for the next Stop (write to enrich the
     join with `token-priors.md`; defaults to `untagged`)
+  - `usage-cal.log` / `usage-state.json` — `/usage` anchor pairs + the current cap estimate
 
 ## Inspect / reset / disable
 

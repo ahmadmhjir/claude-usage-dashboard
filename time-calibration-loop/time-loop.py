@@ -156,6 +156,56 @@ def read_tag(sid):
         return "untagged"
 
 
+def usage_line():
+    """Extrapolated limit % from the last /usage anchor (see usagecal.py).
+
+    Cheap: reads only usage-state.json + durations.log, never calls ccusage, so it
+    adds no latency to the prompt hook. current% ~= anchor% + (non-cache tokens logged
+    since the anchor) / cap. Returns None if no anchor has been recorded yet.
+    """
+    try:
+        with open(os.path.join(DIR, "usage-state.json")) as f:
+            st = json.load(f)
+    except Exception:
+        return None
+    cap = st.get("cap")
+    pct = st.get("session_pct")
+    ts = st.get("ts")
+    if not cap or pct is None:
+        return None
+    try:
+        anchor = datetime.fromisoformat(ts).timestamp()
+    except Exception:
+        anchor = None
+    delta = 0
+    if anchor is not None and os.path.exists(LOG):
+        try:
+            with open(LOG) as f:
+                for line in f:
+                    p = line.rstrip("\n").split("\t")
+                    if len(p) >= 4 and p[3].lstrip("-").isdigit() and int(p[3]) >= 0:
+                        try:
+                            rt = datetime.fromisoformat(p[0]).timestamp()
+                        except Exception:
+                            continue
+                        if rt >= anchor:
+                            delta += int(p[3])
+        except Exception:
+            pass
+    est = pct + (delta / cap * 100.0)
+    age = ""
+    if anchor is not None:
+        age = f", last /usage {int((time.time() - anchor) / 60)}m ago"
+    tail = ""
+    if st.get("week_pct") is not None:
+        tail += f"; week {st['week_pct']:.0f}% used"
+    if st.get("session_reset"):
+        tail += f"; resets {st['session_reset']}"
+    return (f"Limit (proxy{age}): session ~{est:.0f}% used "
+            f"(anchor {pct:.0f}% + {delta/1000:.0f}k non-cache since; "
+            f"cap ~{cap/1e6:.2f}M non-cache){tail}.")
+
+
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "prompt"
     data = read_stdin_json()
@@ -237,6 +287,10 @@ def main():
             "wall-clock time in one short line (they imply a burn rate, tok/s). Both are "
             "auto-measured at turn end from the transcript to seed the prior."
         )
+
+    ul = usage_line()
+    if ul:
+        lines.append(ul)
 
     print(json.dumps({
         "hookSpecificOutput": {
