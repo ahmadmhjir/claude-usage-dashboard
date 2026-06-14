@@ -1,5 +1,10 @@
 # Token Calibration Loop
 
+> Part of the **[calibration loop](../calibration-loop.md)** (tokens · time · burn). This
+> is the **tokens** probe (manual `ccusage` pass). Its sibling
+> [`time-calibration-loop`](../time-calibration-loop/) is the automatic per-turn time +
+> token + burn probe. Both feed the same core, `token-priors.md`.
+
 A self-improving loop that learns how many tokens your task-types actually cost, so you
 can budget against the 5-hr rolling limit instead of hitting it blind. Built on the same
 7-move shape as the edge-loop (`learn-the-loop`): a single carried-forward **core**
