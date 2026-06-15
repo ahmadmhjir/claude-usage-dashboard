@@ -1,0 +1,52 @@
+{
+  "generated_at": "2026-06-15T17:00:00+07:00",
+  "passes": [
+    {"ts":"2026-06-14","pass":2,"type":"design/doc write","phase":"RESCORE","pred_k":10.5,"actual_k":11.0,"err":0.045,"verdict":"ON_BUDGET","lesson":"measure non-cache tokens"},
+    {"ts":"2026-06-14","pass":3,"type":"design/doc write","phase":"SCORE","pred_k":8,"actual_k":3.6,"err":1.2,"verdict":"BLIND","lesson":"reclassified as calibration-pass"},
+    {"ts":"2026-06-15","pass":4,"type":"calibration pass","phase":"SCORE","pred_k":4,"actual_k":3.5,"err":0.14,"verdict":"ON_BUDGET","lesson":"routine pass 3-5k"},
+    {"ts":"2026-06-15","pass":5,"type":"multi-file feature","phase":"SCORE","pred_k":35,"actual_k":39.9,"err":0.12,"verdict":"ON_BUDGET","lesson":"spread-chart top of band"},
+    {"ts":"2026-06-15","pass":6,"type":"calibration pass","phase":"SCORE","pred_k":4,"actual_k":20,"err":0.8,"verdict":"BLIND","lesson":"bundled pass is design/doc class, override band"}
+  ],
+  "turns": [
+    {"ts":"2026-06-14T21:56:53","elapsed_s":32,"out":3276,"noncache":3657,"total":null,"tag":"untagged","pred_out":null,"pred_secs":null,"outlier":false,"unreadable":false},
+    {"ts":"2026-06-14T21:59:33","elapsed_s":109,"out":13485,"noncache":14235,"total":null,"tag":"untagged","pred_out":null,"pred_secs":null,"outlier":false,"unreadable":false},
+    {"ts":"2026-06-15T16:56:56","elapsed_s":257,"out":41339,"noncache":43038,"total":4523090,"tag":"untagged","pred_out":null,"pred_secs":null,"outlier":false,"unreadable":false},
+    {"ts":"2026-06-15T12:00:00","elapsed_s":300,"out":740200,"noncache":196900,"total":9000000,"tag":"loop","pred_out":null,"pred_secs":null,"outlier":true,"unreadable":false},
+    {"ts":"2026-06-15T13:00:00","elapsed_s":-1,"out":-1,"noncache":-1,"total":null,"tag":"untagged","pred_out":null,"pred_secs":null,"outlier":false,"unreadable":true}
+  ],
+  "priors": [
+    {"profile":"read+answer","burn_lo":160,"burn_hi":195,"tok_lo":2,"tok_hi":6,"time_lo":12,"time_hi":40,"conf":0.30,"n":0,"last_verdict":"—","seed":true},
+    {"profile":"design/doc write","burn_lo":100,"burn_hi":140,"tok_lo":7,"tok_hi":14,"time_lo":60,"time_hi":120,"conf":0.55,"n":2,"last_verdict":"ON_BUDGET","seed":false},
+    {"profile":"calibration pass","burn_lo":80,"burn_hi":120,"tok_lo":3,"tok_hi":5,"time_lo":30,"time_hi":75,"conf":0.45,"n":2,"last_verdict":"ROUTINE ON","seed":false},
+    {"profile":"multi-file feature","burn_lo":50,"burn_hi":140,"tok_lo":17,"tok_hi":40,"time_lo":120,"time_hi":360,"conf":0.40,"n":2,"last_verdict":"BAND_HELD","seed":false}
+  ],
+  "anchors": [
+    {"ts":"2026-06-14T22:16:23","pct":12.0,"total":10722857,"block_id":0},
+    {"ts":"2026-06-14T22:16:23","pct":18.0,"total":13243560,"block_id":0},
+    {"ts":"2026-06-14T22:19:03","pct":28.0,"total":16793203,"block_id":0},
+    {"ts":"2026-06-15T16:31:44","pct":34.0,"total":2155953,"block_id":1},
+    {"ts":"2026-06-15T16:54:44","pct":49.0,"total":5339821,"block_id":1},
+    {"ts":"2026-06-15T16:55:19","pct":49.0,"total":5662066,"block_id":1}
+  ],
+  "blocks": [
+    {"block_id":0,"slope_tok_per_pp":380000,"eff_cap":38000000,"cache_hit":0.82,"points":[
+      {"ts":"2026-06-14T22:16:23","pct":12.0,"total":10722857,"block_id":0},
+      {"ts":"2026-06-14T22:16:23","pct":18.0,"total":13243560,"block_id":0},
+      {"ts":"2026-06-14T22:19:03","pct":28.0,"total":16793203,"block_id":0}]},
+    {"block_id":1,"slope_tok_per_pp":210000,"eff_cap":21000000,"cache_hit":0.93,"points":[
+      {"ts":"2026-06-15T16:31:44","pct":34.0,"total":2155953,"block_id":1},
+      {"ts":"2026-06-15T16:54:44","pct":49.0,"total":5339821,"block_id":1},
+      {"ts":"2026-06-15T16:55:19","pct":49.0,"total":5662066,"block_id":1}]}
+  ],
+  "derived": {
+    "rolling_mape": [{"pass":3,"value":0.43},{"pass":4,"value":0.30},{"pass":5,"value":0.18},{"pass":6,"value":0.27}],
+    "on_budget_share": [{"pass":3,"value":0.5},{"pass":4,"value":0.66},{"pass":5,"value":0.75},{"pass":6,"value":0.6}],
+    "convergence_score": 0.73,
+    "burn_median": 124,
+    "burn_iqr": [83, 162],
+    "gen_rate_p90": 195,
+    "counts": {"passes":5,"turns":5,"unreadable":1,"outliers":1},
+    "live_pct": 58,
+    "week_pct": 61
+  }
+}
