@@ -130,6 +130,91 @@ def turn_tokens(transcript, start_epoch):
     return (out, nc, tot) if found else (-1, -1, -1)
 
 
+# ---- predict-vs-actual pairing --------------------------------------------
+def extract_predict(transcript, start_epoch):
+    """Return this turn's PREDICT line (assistant text) or None.
+
+    Scans assistant messages with timestamp >= turn start, concatenates their text
+    blocks, and returns the first line beginning with PREDICT (case-insensitive).
+    This is the prediction half of the loop; the actual half is turn_tokens/elapsed.
+    """
+    try:
+        with open(transcript) as f:
+            for line in f:
+                try:
+                    o = json.loads(line)
+                except Exception:
+                    continue
+                if o.get("type") != "assistant":
+                    continue
+                ts = o.get("timestamp")
+                if not ts:
+                    continue
+                try:
+                    te = datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+                except Exception:
+                    continue
+                if te < start_epoch - 2:
+                    continue
+                content = (o.get("message") or {}).get("content") or []
+                text = ""
+                if isinstance(content, list):
+                    for b in content:
+                        if isinstance(b, dict) and b.get("type") == "text":
+                            text += b.get("text") or ""
+                for ln in text.splitlines():
+                    if re.match(r"\s*PREDICT\b", ln, re.I):
+                        return ln.strip()[:200]
+    except Exception:
+        return None
+    return None
+
+
+def parse_pred(pred):
+    """Best-effort (out_tokens, seconds) from a PREDICT line; None where absent."""
+    out = secs = None
+    if not pred:
+        return out, secs
+    mt = re.search(r"(\d+(?:\.\d+)?)\s*k\b", pred, re.I)
+    if mt:
+        out = float(mt.group(1)) * 1000
+    m2 = re.search(r"(\d+)\s*m\s*(\d+)?\s*s?\b", pred)
+    if m2:
+        secs = int(m2.group(1)) * 60 + (int(m2.group(2)) if m2.group(2) else 0)
+    else:
+        m3 = re.search(r"~?\s*(\d+)\s*s\b", pred)
+        if m3:
+            secs = int(m3.group(1))
+    return out, secs
+
+
+def format_pair(pair_path):
+    """Read+consume the stored pair file, return a 'predicted -> actual [err]' line."""
+    try:
+        with open(pair_path) as f:
+            p = json.load(f)
+        os.remove(pair_path)
+    except Exception:
+        return None
+    out, el, pred = p.get("out"), p.get("elapsed"), p.get("pred")
+    if out is None or out < 0 or el is None:
+        return None
+    po, ps = parse_pred(pred)
+    seg = f"actual {human_tok(out)}/{human_time(el)}"
+    if el > 0:
+        seg += f" ({out/el:.0f} tok/s)"
+    errs = []
+    if po:
+        errs.append(f"tok {out/po:.2f}x")
+    if ps and el > 0:
+        errs.append(f"time {el/ps:.2f}x")
+    pred_s = pred if pred else "(no PREDICT line found)"
+    line = f'Last turn scored, predicted: "{pred_s}" -> {seg}'
+    if errs:
+        line += " [err " + ", ".join(errs) + "]"
+    return line
+
+
 # ---- log ------------------------------------------------------------------
 def load_rows():
     """Return list of dicts: {elapsed, out, nc} (out/nc None when unavailable)."""
@@ -242,6 +327,13 @@ def main():
             with open(LOG, "a") as f:
                 f.write(f"{datetime.now().isoformat(timespec='seconds')}\t"
                         f"{int(elapsed)}\t{out}\t{nc}\t{tot}\t{tag}\n")
+            # stash this turn's PREDICT + actuals so the next prompt can score it
+            try:
+                pred = extract_predict(tr, start) if tr else None
+                with open(os.path.join(DIR, f"pair-{sid}.json"), "w") as pf:
+                    json.dump({"pred": pred, "out": out, "elapsed": int(elapsed)}, pf)
+            except Exception:
+                pass
         except Exception:
             pass
         finally:
@@ -286,6 +378,9 @@ def main():
             if last["elapsed"] > 0:
                 bit += f", {last['out']/last['elapsed']:.0f} tok/s"
         lines.append("Most recent turn: " + bit + ".")
+        pair = format_pair(os.path.join(DIR, f"pair-{sid}.json"))
+        if pair:
+            lines.append(pair)
         lines.append(
             "PREDICT before working, one line: task-type (from token-priors.md), output "
             "tokens, wall-clock time. They should satisfy time ~= output_tokens / burn_rate "

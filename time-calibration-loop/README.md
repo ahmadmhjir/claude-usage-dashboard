@@ -13,11 +13,24 @@ automatic, because each turn's actuals are measured for free.
 
 | Hook | Fires | Does |
 |------|-------|------|
-| `UserPromptSubmit` | every prompt | injects `Wall-clock now: …` + the unified prior (time band, output-token band, effective burn, gen-rate p90 over the last 20 turns), records the turn's start epoch, and asks Claude to predict {task-type, output tokens, wall-clock time} consistent with `time ≈ tokens / burn` |
-| `Stop` | turn end | measures elapsed since start **and reads the transcript** (`message.usage`) to sum this turn's `output_tokens` and non-cache tokens, then appends one row to `durations.log` |
+| `UserPromptSubmit` | every prompt | injects `Wall-clock now: …` + the unified prior (time band, output-token band, effective burn, gen-rate p90 over the last 20 turns), **scores the previous turn** (`Last turn scored, predicted: … -> actual … [err tok/time]`), records the turn's start epoch, and asks Claude to predict {task-type, output tokens, wall-clock time} consistent with `time ≈ tokens / burn` |
+| `Stop` | turn end | measures elapsed since start **and reads the transcript** (`message.usage`) to sum this turn's `output_tokens` and non-cache tokens, appends one row to `durations.log`, **and stashes this turn's `PREDICT` line + actuals to `pair-<sid>.json`** for the next prompt to score |
 
-Each turn: predict from prior → work → auto-measure tokens + time → prior sharpens. No
-manual snapshot needed; the transcript already carries per-message token usage.
+Each turn: predict from prior → work → auto-measure tokens + time → **see the predict-vs-actual
+error in-band next turn** → prior sharpens. No manual snapshot needed; the transcript already
+carries both the PREDICT line and per-message token usage.
+
+### Predict-vs-actual scoring (closed loop)
+
+The PREDICT half and the actual half used to live apart: the model predicted, the actuals
+were logged silently, and nothing paired them. Now `Stop` extracts the turn's `PREDICT`
+line from the transcript and stores it with the measured `output`/`elapsed`; the next
+`UserPromptSubmit` reads that pair, best-effort parses the predicted token (`3.5k`) and
+time (`50s`/`2m30s`) figures, and prints the error ratio (`actual / predicted`). The pair
+file is consumed once, fails silent, and degrades to actuals-only when no PREDICT line is
+found or the numbers aren't parseable. DISTILL (updating `token-priors.md`) stays manual,
+but the per-turn error is now visible every turn — a `>1.6x` miss is the BLIND signal to
+re-anchor a row.
 
 ## Why burn rate
 
