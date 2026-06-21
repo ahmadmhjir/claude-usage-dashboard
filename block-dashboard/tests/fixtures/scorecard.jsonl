@@ -1,0 +1,5 @@
+{"ts":"2026-06-14","pass":2,"phase":"SCORE","type":"design/doc write","pred_k":"6-15","actual_k":74.9,"err":0.86,"verdict":"BLIND"}
+{"ts":"2026-06-14","pass":2,"phase":"RESCORE","type":"design/doc write","actual_k":11.0,"err":0.045,"verdict":"ON_BUDGET","lesson":"measure non-cache"}
+{"ts":"2026-06-14","pass":3,"phase":"SCORE","type":"design/doc write","pred_k":8,"actual_k":3.6,"err":1.2,"verdict":"BLIND","note":"reclassified"}
+{"ts":"2026-06-15","pass":6,"phase":"OBSERVE","type":"multi-file feature","actual_k":220,"verdict":"BAND_HELD","note":"7-task loop"}
+{"ts":"2026-06-15","pass":7,"phase":"SCORE","type":"calibration pass","pred_k":"3-5","actual_k":"unknown_block_only","verdict":"BLIND"}
