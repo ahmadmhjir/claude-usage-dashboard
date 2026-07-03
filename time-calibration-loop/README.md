@@ -2,43 +2,25 @@
 
 > Part of the **[calibration loop](../calibration-loop.md)**. This is the **automatic
 > per-turn probe**; its sibling [`token-calibration-loop`](../token-calibration-loop/) is
-> the manual scored `ccusage` token pass. Both feed the same core, `token-priors.md`.
+> the manual scored `ccusage` pass. Both feed the same core:
+> `~/.claude/calibration/token-priors.md`.
 
-Makes Claude Code time-conscious every turn and trains it to predict, per turn, how many
-**tokens** it will produce, how long it will take, and therefore the **burn rate**
-(output tok/s). Same PREDICT-before-peek discipline as the token loop — but fully
-automatic, because each turn's actuals are measured for free.
+Makes Claude Code time-conscious every turn and trains it to predict, per turn, its
+output **tokens**, **wall-clock time**, and therefore **burn rate** (output tok/s) — the
+`time ≈ tokens / burn` model lives in the [umbrella doc](../calibration-loop.md). Fully
+automatic: each turn's actuals are measured for free from the hook payload + transcript.
 
 ## How it loops
 
 | Hook | Fires | Does |
 |------|-------|------|
-| `UserPromptSubmit` | every prompt | injects `Wall-clock now: …` + the unified prior (time band, output-token band, effective burn, gen-rate p90 over the last 20 turns), **scores the previous turn** (`Last turn scored, predicted: … -> actual … [err tok/time]`), records the turn's start epoch, and asks Claude to predict {task-type, output tokens, wall-clock time} consistent with `time ≈ tokens / burn` |
-| `Stop` | turn end | measures elapsed since start **and reads the transcript** (`message.usage`) to sum this turn's `output_tokens` and non-cache tokens, appends one row to `durations.log`, **and stashes this turn's `PREDICT` line + actuals to `pair-<sid>.json`** for the next prompt to score |
+| `UserPromptSubmit` | every prompt | injects `Wall-clock now: …` + the unified prior (per-task-type bands over recent turns), **scores the previous turn** (`Last turn scored, predicted: … -> actual … [err tok/time]`), records the turn's start epoch, and asks for a one-line prediction {task-type, output tokens, time} consistent with `time ≈ tokens / burn` |
+| `Stop` | turn end | measures elapsed, sums the turn's `output_tokens` + non-cache tokens from the transcript (`message.usage`), appends one row to `durations.log`, extracts the turn's PREDICT line, and appends the scored predict-vs-actual pair to `scorecard.jsonl` |
 
-Each turn: predict from prior → work → auto-measure tokens + time → **see the predict-vs-actual
-error in-band next turn** → prior sharpens. No manual snapshot needed; the transcript already
-carries both the PREDICT line and per-message token usage.
-
-### Predict-vs-actual scoring (closed loop)
-
-The PREDICT half and the actual half used to live apart: the model predicted, the actuals
-were logged silently, and nothing paired them. Now `Stop` extracts the turn's `PREDICT`
-line from the transcript and stores it with the measured `output`/`elapsed`; the next
-`UserPromptSubmit` reads that pair, best-effort parses the predicted token (`3.5k`) and
-time (`50s`/`2m30s`) figures, and prints the error ratio (`actual / predicted`). The pair
-file is consumed once, fails silent, and degrades to actuals-only when no PREDICT line is
-found or the numbers aren't parseable. DISTILL (updating `token-priors.md`) stays manual,
-but the per-turn error is now visible every turn — a `>1.6x` miss is the BLIND signal to
-re-anchor a row.
-
-## Why burn rate
-
-`time ≈ output_tokens / burn_rate`. Pure generation rate is ~constant per model, but a
-turn's wall-clock also includes tool-wait (builds, network) where no tokens are produced,
-so observed *effective* burn is lower on tool-heavy turns. The loop reports both: median
-effective burn and a gen-rate estimate (p90 of output/sec). See
-[`../calibration-loop.md`](../calibration-loop.md) for the full model.
+Scoring degrades gracefully: no PREDICT line or unparseable numbers → actuals-only row,
+fail-silent. A `>1.6x` token miss is the BLIND signal to re-anchor a priors row. DISTILL
+(updating the priors table) stays manual: `python3 backfill.py` re-derives the whole table
+from `durations.log` (preview with `--dry-run`).
 
 ## Limit calibration (usagecal)
 
@@ -53,13 +35,12 @@ python3 usagecal.py status          # cap + current % (authoritative ccusage rea
 ```
 
 `cap ≈ total_tokens / (session_pct/100)`; the stored cap is the median over all pasted
-pairs. **Basis = total tokens** (incl cache), not non-cache: measured 2026-06-14, across two
-`/usage` reads (12%→18%) non-cache barely moved (+11k) while total grew +2.5M — cache-hit
-~97%, so the quota follows total/cost. Between pastes, the `UserPromptSubmit` hook
-**extrapolates** the current % by adding the per-turn total tokens logged in `durations.log`
-since the anchor — local-file reads only, no ccusage call, so it adds no per-turn latency.
-Each new paste re-anchors and removes drift. It is a **proxy** (`/usage` is cost-weighted;
-total is raw cache-inclusive tokens) and is labelled as such in the injected line.
+pairs. **Basis = total tokens** (incl cache), not non-cache: measured 2026-06-14, across
+two `/usage` reads non-cache barely moved (+11k) while total grew +2.5M — cache-hit ~97%,
+so the quota follows total/cost. Between pastes, the `UserPromptSubmit` hook
+**extrapolates** the current % from the per-turn totals in `durations.log` — local reads
+only, no ccusage call, no added latency. Each new paste re-anchors. It is a **proxy**
+(`/usage` is cost-weighted) and is labelled as such in the injected line.
 
 ## Install (this or any workspace)
 
@@ -67,31 +48,33 @@ total is raw cache-inclusive tokens) and is labelled as such in the injected lin
 bash time-calibration-loop/install.sh
 ```
 
-Then open `/hooks` in Claude Code once (or restart) so the hooks load this session.
-The installer is **idempotent** — re-run it after `git pull` in a new workspace. It
-bakes this package's absolute path into the hook commands, so it works wherever the
-repo is cloned. Override the target with `CLAUDE_SETTINGS=/path/to/settings.json`.
-
-Requires `python3` (parses the hook payload + transcript — `jq` is **not** needed).
+Then open `/hooks` in Claude Code once (or restart). The installer is **idempotent** —
+re-run it after `git pull` or in a new clone; it bakes this package's absolute path into
+the hook commands. Override the target with `CLAUDE_SETTINGS=/path/to/settings.json`.
+Requires `python3` only (`jq` not needed).
 
 ## Files
 
 - `time-loop.py` — the hook (modes: `prompt`, `stop`)
+- `backfill.py` — re-derive the whole priors table from `durations.log` (re-tags history
+  by joining rows to transcript PREDICT lines); `--dry-run` reports without writing
 - `usagecal.py` — `/usage` → cap calibration CLI (`record`, `status`)
 - `install.sh` — idempotent merge of the two hooks into `~/.claude/settings.json`
-- State (created at runtime, not committed): `~/.claude/time-loop/`
-  - `durations.log` — tab-separated
+- State (created at runtime, never committed):
+  - `~/.claude/time-loop/durations.log` — tab-separated
     `<iso>\t<elapsed_s>\t<out_tok>\t<noncache_tok>\t<total_tok>\t<tag>`, rolling, global
-    (older 4/5-field rows still read; missing columns skipped)
-  - `start-<session_id>` — transient per-session start epoch (auto-removed on Stop)
-  - `tag-<session_id>` — optional task-type tag for the next Stop (write to enrich the
-    join with `token-priors.md`; defaults to `untagged`)
-  - `usage-cal.log` / `usage-state.json` — `/usage` anchor pairs + the current cap estimate
+    (older 4/5-field rows still read). `<tag>` is the task-type, parsed automatically
+    from the turn's PREDICT line — no manual tagging
+  - `~/.claude/time-loop/start-<sid>` / `pair-<sid>.json` — transient per-session state
+    (consumed on the next hook fire; stale files reaped after ~12h)
+  - `~/.claude/time-loop/usage-cal.log` / `usage-state.json` — `/usage` anchors + cap estimate
+  - `~/.claude/calibration/token-priors.md` + `scorecard.jsonl` — the learned table and
+    the per-turn scored feed (the proof-of-learning substrate)
 
 ## Inspect / reset / disable
 
-- Recent actuals (time + tokens + burn): `tail ~/.claude/time-loop/durations.log`
+- Recent actuals: `tail ~/.claude/time-loop/durations.log`
 - Reset the prior: `rm ~/.claude/time-loop/durations.log`
-- Tag a turn's task-type: `echo "multi-file feature" > ~/.claude/time-loop/tag-<session_id>`
+- Re-distill priors from the log: `python3 backfill.py` (preview with `--dry-run`)
 - Disable: remove the `UserPromptSubmit` + `Stop` blocks from `~/.claude/settings.json`,
-  or toggle via `/hooks`. Config is global, so it applies to every project.
+  or toggle via `/hooks`. Config is global — applies to every project.

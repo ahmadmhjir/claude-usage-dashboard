@@ -4,3 +4,10 @@ usage_data.json
 "usage_data copy.json"
 usage_data copy.json
 block-dashboard/HANDOFF*
+.DS_Store
+__pycache__/
+ccusage/
+ccusage-ledger.sh
+ccusage-ledger.cron.log
+usage-ledger.jsonl
+token-calibration-loop/token-scorecard.jsonl

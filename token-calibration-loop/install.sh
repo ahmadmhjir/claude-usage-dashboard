@@ -7,9 +7,9 @@ set -euo pipefail
 LOOP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
 # The in-package token-priors.md is the SEED/EXAMPLE only. The live, calibrated ledger
-# lives outside the example package so re-running this installer never clobbers it.
-# Override PRIORS_FILE to point at your own ledger.
-PRIORS_FILE="${PRIORS_FILE:-$HOME/trading-bot/indodax-bot/docs/loop/token-priors.md}"
+# lives outside the package so re-running this installer never clobbers it. This default
+# matches what time-loop.py and backfill.py read/write; override to relocate.
+PRIORS_FILE="${PRIORS_FILE:-$HOME/.claude/calibration/token-priors.md}"
 SEED_PRIORS="$LOOP_DIR/token-priors.md"
 
 echo "Loop package: $LOOP_DIR"

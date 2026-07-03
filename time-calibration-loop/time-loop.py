@@ -25,20 +25,33 @@ assistant messages whose timestamp >= the recorded turn start. Non-cache tokens 
 input_tokens + output_tokens (same quantity the manual ccusage pass calibrates on).
 
 State in ~/.claude/time-loop/:
-  start-<session_id>  transient per-session start epoch (removed on Stop)
-  durations.log       tab-separated rows, schema v2:
-                        <iso>\t<elapsed_s>\t<out_tok>\t<noncache_tok>\t<tag>
-                      (older 2-field rows are still read; their token stats skipped)
+  start-<session_id>  transient per-session start epoch (removed on Stop; stale ones reaped)
+  pair-<session_id>   transient {pred,out,elapsed} consumed by the next prompt to score
+  durations.log       tab-separated rows, schema v3:
+                        <iso>\t<elapsed_s>\t<out_tok>\t<noncache_tok>\t<total_tok>\t<tag>
+                      (older 2/5-field rows are still read; missing stats are skipped)
+
+The <tag> is the task-type, parsed straight from this turn's PREDICT line against the
+priors-table vocab (parse_task_type) — no manual tagging. Scored turns are also appended to
+~/.claude/calibration/scorecard.jsonl, and backfill.py re-derives the whole priors table
+from this log.
 
 Fails silent: a broken hook must never block a turn.
 """
-import sys, os, re, json, time, statistics
+import sys, os, re, json, time, statistics, subprocess
 from datetime import datetime
 
 DIR = os.path.expanduser("~/.claude/time-loop")
 LOG = os.path.join(DIR, "durations.log")
+PRIORS = os.path.expanduser("~/.claude/calibration/token-priors.md")
+SCORE = os.path.expanduser("~/.claude/calibration/scorecard.jsonl")
 WINDOW = 20
 MAX_PLAUSIBLE = 86400
+
+# Fallback task-type vocab when the priors file can't be read (keep in sync with the
+# priors table row labels — that file is the real source of truth for task-types).
+DEFAULT_TYPES = ["read+answer", "single-file edit", "multi-file feature",
+                 "codebase explore", "backtest/study run", "design/doc write", "debug loop"]
 
 
 def read_stdin_json():
@@ -51,6 +64,37 @@ def read_stdin_json():
 def session_id(data):
     s = str(data.get("session_id") or "default")
     return "".join(c for c in s if c.isalnum() or c in "-_") or "default"
+
+
+def is_print_mode():
+    """True when this hook fires inside a non-interactive `claude -p`/--print run
+    (e.g. nested by `headroom learn`). Those children parse their own stdout as
+    structured JSON, so the PREDICT instruction must not be injected into them."""
+    try:
+        pid = os.getppid()
+        for _ in range(10):
+            if pid <= 1:
+                break
+            try:
+                args = subprocess.run(["ps", "-o", "args=", "-p", str(pid)],
+                                      capture_output=True, text=True, timeout=2).stdout.strip()
+                ppid = subprocess.run(["ps", "-o", "ppid=", "-p", str(pid)],
+                                      capture_output=True, text=True, timeout=2).stdout.strip()
+            except Exception:
+                break
+            low = args.lower()
+            toks = args.split()
+            if "headroom" in low:
+                return True
+            if "claude" in low and ("-p" in toks or "--print" in toks):
+                return True
+            try:
+                pid = int(ppid)
+            except (ValueError, TypeError):
+                break
+    except Exception:
+        pass
+    return False
 
 
 def human_time(seconds):
@@ -188,6 +232,99 @@ def parse_pred(pred):
     return out, secs
 
 
+# ---- task-type tagging -----------------------------------------------------
+def _norm(s):
+    return re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).strip()
+
+
+def to_tag(label):
+    return re.sub(r"[^a-z0-9]+", "-", (label or "").lower()).strip("-") or "untagged"
+
+
+def load_task_types(priors_path=PRIORS):
+    """Task-type vocab = the first column of the priors markdown table.
+
+    The priors file is the single source of truth for which task-types exist; falling
+    back to DEFAULT_TYPES keeps tagging working if that file is missing/unreadable.
+    """
+    types = []
+    try:
+        with open(priors_path) as f:
+            for line in f:
+                s = line.strip()
+                if not s.startswith("|") or "task-type" in s or set(s) <= set("|-: "):
+                    continue
+                label = s.strip("|").split("|")[0].strip()
+                if label:
+                    types.append(label)
+    except Exception:
+        pass
+    return types or DEFAULT_TYPES
+
+
+def parse_task_type(pred, vocab=None):
+    """First known task-type *mentioned* in a PREDICT line (by position), else 'untagged'."""
+    if vocab is None:
+        vocab = load_task_types()
+    p = _norm(pred)
+    if not p or not vocab:
+        return "untagged"
+    best, best_pos = None, len(p) + 1
+    for label in vocab:
+        idx = p.find(_norm(label))
+        if 0 <= idx < best_pos:
+            best, best_pos = label, idx
+    return to_tag(best) if best else "untagged"
+
+
+def per_type_summary(rows, min_n=3, limit=5):
+    """Compact 'tag (n): ~tok / ~time / burn' lines for tags with enough samples."""
+    agg = {}
+    for r in rows:
+        tg = r.get("tag")
+        if tg and tg != "untagged":
+            agg.setdefault(tg, []).append(r)
+    out = []
+    for tg in sorted(agg, key=lambda k: -len(agg[k])):
+        rs = agg[tg]
+        if len(rs) < min_n:
+            continue
+        ts = [r["elapsed"] for r in rs]
+        toks = [r["out"] for r in rs if r["out"] is not None]
+        burns = [r["out"] / r["elapsed"] for r in rs
+                 if r["out"] is not None and r["elapsed"] > 0]
+        seg = f"  {tg} (n={len(rs)}): "
+        seg += f"~{human_tok(statistics.median(toks))} tok / " if toks else ""
+        seg += f"~{human_time(statistics.median(ts))}"
+        if burns:
+            seg += f" / {statistics.median(burns):.0f} tok/s"
+        out.append(seg)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _append_scorecard(pred, out, el, po, ps):
+    """Persist one scored turn to scorecard.jsonl (the MAPE / ON_BUDGET-trend substrate)."""
+    try:
+        verdict = None
+        if po and out:
+            e = abs(out - po) / out
+            verdict = "ON_BUDGET" if e <= 0.2 else "DRIFT" if e <= 0.6 else "BLIND"
+        rec = {"ts": datetime.now().isoformat(timespec="seconds"),
+               "task_type": parse_task_type(pred),
+               "pred_tok": po, "actual_tok": out,
+               "pred_s": ps, "actual_s": el,
+               "tok_err": round(out / po, 3) if po else None,
+               "time_err": round(el / ps, 3) if ps and el > 0 else None,
+               "verdict": verdict}
+        os.makedirs(os.path.dirname(SCORE), exist_ok=True)
+        with open(SCORE, "a") as f:
+            f.write(json.dumps(rec) + "\n")
+    except Exception:
+        pass
+
+
 def format_pair(pair_path):
     """Read+consume the stored pair file, return a 'predicted -> actual [err]' line."""
     try:
@@ -200,6 +337,7 @@ def format_pair(pair_path):
     if out is None or out < 0 or el is None:
         return None
     po, ps = parse_pred(pred)
+    _append_scorecard(pred, out, el, po, ps)
     seg = f"actual {human_tok(out)}/{human_time(el)}"
     if el > 0:
         seg += f" ({out/el:.0f} tok/s)"
@@ -227,28 +365,37 @@ def load_rows():
                 p = line.rstrip("\n").split("\t")
                 if len(p) < 2 or not p[1].isdigit():
                     continue
-                r = {"elapsed": int(p[1]), "out": None, "nc": None, "total": None}
+                r = {"elapsed": int(p[1]), "out": None, "nc": None, "total": None, "tag": None}
                 if len(p) >= 3 and p[2].lstrip("-").isdigit() and int(p[2]) >= 0:
                     r["out"] = int(p[2])
                 if len(p) >= 4 and p[3].lstrip("-").isdigit() and int(p[3]) >= 0:
                     r["nc"] = int(p[3])
-                if len(p) >= 6 and p[4].lstrip("-").isdigit() and int(p[4]) >= 0:
-                    r["total"] = int(p[4])  # v3 rows only (6 fields); v2 p[4] is the tag
+                if len(p) >= 6:
+                    if p[4].lstrip("-").isdigit() and int(p[4]) >= 0:
+                        r["total"] = int(p[4])  # v3 rows (6 fields): total then tag
+                    r["tag"] = p[5].strip() or None
+                elif len(p) == 5:
+                    r["tag"] = p[4].strip() or None  # v2 rows: tag is field 5
                 rows.append(r)
     except Exception:
         pass
     return rows
 
 
-def read_tag(sid):
-    tag_file = os.path.join(DIR, f"tag-{sid}")
+def reap_orphans(max_age_h=12):
+    """Delete stale per-session start-/pair- files (sessions that never cleanly stopped)."""
+    cutoff = time.time() - max_age_h * 3600
     try:
-        with open(tag_file) as f:
-            t = f.read().strip().replace("\t", " ")[:40]
-        os.remove(tag_file)
-        return t or "untagged"
+        for name in os.listdir(DIR):
+            if name.startswith(("start-", "pair-")):
+                fp = os.path.join(DIR, name)
+                try:
+                    if os.path.getmtime(fp) < cutoff:
+                        os.remove(fp)
+                except OSError:
+                    pass
     except Exception:
-        return "untagged"
+        pass
 
 
 def usage_line():
@@ -323,13 +470,14 @@ def main():
             tr = find_transcript(data)
             if tr:
                 out, nc, tot = turn_tokens(tr, start)
-            tag = read_tag(sid)
+            # task-type comes straight from this turn's PREDICT line (was an unused tag file)
+            pred = extract_predict(tr, start) if tr else None
+            tag = parse_task_type(pred)
             with open(LOG, "a") as f:
                 f.write(f"{datetime.now().isoformat(timespec='seconds')}\t"
                         f"{int(elapsed)}\t{out}\t{nc}\t{tot}\t{tag}\n")
             # stash this turn's PREDICT + actuals so the next prompt can score it
             try:
-                pred = extract_predict(tr, start) if tr else None
                 with open(os.path.join(DIR, f"pair-{sid}.json"), "w") as pf:
                     json.dump({"pred": pred, "out": out, "elapsed": int(elapsed)}, pf)
             except Exception:
@@ -341,9 +489,15 @@ def main():
                 os.remove(start_file)
             except OSError:
                 pass
+            reap_orphans()
         return
 
     # ---- prompt mode -------------------------------------------------------
+    # Skip nested non-interactive runs (e.g. `headroom learn`'s `claude -p`):
+    # injecting the PREDICT instruction pollutes their structured JSON stdout.
+    if is_print_mode():
+        return
+
     try:
         with open(start_file, "w") as f:
             f.write(str(now))
@@ -361,7 +515,11 @@ def main():
                        if r["out"] is not None and r["elapsed"] > 0)
         t_med = human_time(statistics.median(times))
         t_lo, t_hi = human_time(min(times)), human_time(max(times))
-        prior = (f"Calibration prior (last {len(recent)} turns): "
+        type_lines = per_type_summary(rows[-80:])
+        if type_lines:
+            lines.append("Per task-type (recent — RECALL your row before predicting):")
+            lines.extend(type_lines)
+        prior = (f"Calibration prior (last {len(recent)} turns, all task-types blended): "
                  f"time median {t_med} (range {t_lo}-{t_hi})")
         if toks:
             prior += (f" | output median {human_tok(statistics.median(toks))} "
